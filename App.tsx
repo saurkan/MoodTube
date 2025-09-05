@@ -9,21 +9,18 @@ import { useApiKey } from './hooks/useApiKey';
 import { fetchVideos } from './services/youtubeService';
 import type { VideoItem } from './types';
 import { Mood } from './types';
-import { MOOD_TO_QUERY_MAP, INITIAL_VIDEO_QUERIES } from './constants';
+import { MOOD_TO_QUERY_MAP } from './constants';
 
 const App: React.FC = () => {
   const { apiKey, setApiKey, isKeyLoading } = useApiKey();
   const [videos, setVideos] = useState<VideoItem[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isMoodModalOpen, setIsMoodModalOpen] = useState<boolean>(false);
   const [detectedMood, setDetectedMood] = useState<Mood | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string | null>(null);
 
-  const getRandomQuery = () => {
-    return INITIAL_VIDEO_QUERIES[Math.floor(Math.random() * INITIAL_VIDEO_QUERIES.length)];
-  };
-
-  const loadVideos = useCallback(async (currentApiKey: string | null) => {
+  const loadVideos = useCallback(async (currentApiKey: string | null, mood: Mood | null, isRandom: boolean = false, customQuery?: string) => {
     if (!currentApiKey) {
       setIsLoading(false);
       return;
@@ -33,11 +30,33 @@ const App: React.FC = () => {
     setError(null);
     try {
       let query: string;
-      if (detectedMood) {
-        const queries = MOOD_TO_QUERY_MAP[detectedMood];
+      
+      if (customQuery) {
+        // Use custom search query
+        query = customQuery;
+      } else if (isRandom) {
+        // Load random videos when API key is first entered - focused on English content
+        const randomQueries = [
+          "trending music videos 2024",
+          "funny comedy sketches",
+          "movie scenes compilation",
+          "viral dance videos",
+          "stand up comedy",
+          "music video hits",
+          "funny moments compilation",
+          "movie trailers 2024",
+          "comedy shows",
+          "music performances",
+          "funny pranks",
+          "movie clips"
+        ];
+        query = randomQueries[Math.floor(Math.random() * randomQueries.length)];
+      } else if (mood) {
+        // Load mood-specific videos
+        const queries = MOOD_TO_QUERY_MAP[mood];
         query = queries[Math.floor(Math.random() * queries.length)];
       } else {
-        query = getRandomQuery();
+        return;
       }
       
       const videoData = await fetchVideos(query, currentApiKey);
@@ -52,13 +71,27 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [detectedMood]);
+  }, []);
 
   useEffect(() => {
-    if (!isKeyLoading) {
-      loadVideos(apiKey);
+    if (!isKeyLoading && apiKey && detectedMood) {
+      loadVideos(apiKey, detectedMood);
     }
   }, [apiKey, detectedMood, isKeyLoading, loadVideos]);
+
+  // Load random videos when API key is first entered
+  useEffect(() => {
+    if (!isKeyLoading && apiKey && !detectedMood && !searchQuery) {
+      loadVideos(apiKey, null, true);
+    }
+  }, [apiKey, isKeyLoading, loadVideos, detectedMood, searchQuery]);
+
+  // Load videos when search query changes
+  useEffect(() => {
+    if (!isKeyLoading && apiKey && searchQuery) {
+      loadVideos(apiKey, null, false, searchQuery);
+    }
+  }, [searchQuery, apiKey, isKeyLoading, loadVideos]);
   
   const handleApiKeySubmit = (newKey: string) => {
     setApiKey(newKey);
@@ -66,7 +99,13 @@ const App: React.FC = () => {
   
   const handleMoodDetected = (mood: Mood) => {
     setDetectedMood(mood);
+    setSearchQuery(null); // Clear search when mood is detected
     setIsMoodModalOpen(false);
+  };
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    setDetectedMood(null); // Clear mood when searching
   };
 
   const MainContent = () => {
@@ -78,22 +117,17 @@ const App: React.FC = () => {
       return <ApiKeyModal onSubmit={handleApiKeySubmit} />;
     }
 
-    const title = detectedMood 
-      ? `Timeline Curated for Your ${detectedMood.charAt(0).toUpperCase() + detectedMood.slice(1)} Mood`
-      : 'Explore Videos';
-
     return (
-      <main className="px-4 py-6 col-span-12 md:col-span-10 lg:col-span-11 bg-zinc-900 overflow-y-auto">
-        <h2 className="text-2xl font-bold mb-4 px-4">{title}</h2>
-        <VideoGrid videos={videos} isLoading={isLoading} error={error} />
+      <main className="flex-1 bg-gray-900 overflow-y-auto">
+        <VideoGrid videos={videos} isLoading={isLoading} error={error} currentMood={detectedMood} searchQuery={searchQuery} />
       </main>
     );
   };
 
   return (
-    <div className="flex flex-col h-screen">
-      <Header />
-      <div className="flex-1 grid grid-cols-12 overflow-hidden">
+    <div className="flex flex-col h-screen bg-gray-900">
+      <Header onSearch={handleSearch} />
+      <div className="flex flex-1 overflow-hidden">
         <Sidebar onMoodButtonClick={() => setIsMoodModalOpen(true)} />
         <MainContent />
       </div>
