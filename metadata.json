@@ -1,0 +1,7 @@
+{
+  "name": "MoodStream - YouTube Mood Curator",
+  "description": "A YouTube clone that uses your webcam to detect your mood and curates a personalized video feed to match how you're feeling. The app works offline for mood detection and prompts for a YouTube API key to fetch videos.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
